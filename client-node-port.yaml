@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Service #Sets up networking in a kubernetes cluster
+metadata:
+  name: client-node-port
+spec:
+  type: NodePort #This subtype exposes a set of pods /container to the outside world(only good for DEV purposes, not in PROD env).
+  # Other possible subtypes are: ClusterIP, LoadBalancer, Ingress
+  # ClusterIP: exposes a set of pods to the other objects in the cluster. It means anything else in our node can access the object the ClusterIP is pointing at.
+  #            ClusterIP does not allow traffic from outside world.
+  # LoadBalancer: Legacy way of getting network traffic into a cluster. Older way, deprecated.
+  # Ingress: Exposes a set of services to the outside world. This is the latest way. In the world of kubernetes, there are several different
+  # implementations of Ingress. For example Nginx Ingress, kubernetes Ingress.
+
+  ports: #describers all ports that must be mapped/opened-up on target object. It's an array.
+    - port: 3050 #This Port is unused here, but essently will be used by Other PODs (inside our application) that needs to connect to multi-docker-client POD.
+      targetPort: 3000 #Port which is open for the actual container running in POD. It's identical to the containerPort mentioned in POD definition.
+      # It indicates that we want to send any incomming trafic into Port 3000 inside this pod(port 3000 is mapped to multi-docker-client container)
+      nodePort: 31515 # Important when type is NodePort. It's the port that we inside the browser are going to access whenever we want to test-out the container running inside thatPOD.
+      # Port which is open for Outside world(in browser. >minikube ip will provide the ip of VM one should use. localhost will not work)
+      # and will map to the targetPort actually. It must be between 30000 & 32767. It's optional and when not provided, will get generated.
+  selector:
+    component: web #This will help Service find another object(POD here) running inside kubernetes cluster with same label(key: value),
+    #and direct all traffic comming to above defined port to the container running in that POD. Service watches all pods matching the selector. So even if the IP of the POD changes,
+    # service will automatically be able to route the traffic directly to it.
+    #Pods are comming/goind all the time, getting deleted/recreated/new IP assgined. Service abstracts out this complexity from us.

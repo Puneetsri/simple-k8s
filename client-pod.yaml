@@ -1,0 +1,115 @@
+apiVersion: v1 #Note that these deployment files are fed to master using kubectl, and it's upto master to reach out to Nodes and ask them to perform
+# work. We should never be going to reach a node directly and start a container in there. It should  always be via master [using kubectl].
+# Master is always watching the Nodes, if any of object runs into some issue, master will automatically attempt to recreate that object in that node
+# in order to fullfill master's list of responsibilities.
+kind: Pod # Pod is a kubernets Object that runs one or more closely related containers.  Pods are smallest thing that we can deploy in kubernetes. We can not deploy individual containers by themselves(as in docker-compose).
+# Any time we want to deploy a container, we have to make use of POD. An Object of type POD are used to run one or more closely related containers.
+# PODs group containers with very similar purpose. For example, the containers (with very tightly coupled relationship) which must be deployed together
+# in order for the application to work correctly. should be part of a single POD.
+# These PODs are run insode Node (VM created by minicube in dev e.g. This node has its own copy of docker running which is totally distinct from the docker
+# running on my local laptop).
+# Every single Node has a kube-proxy which is one-single window to the outside world. Every request comming to Node comes
+# through kube-proxy which inspects the requests and decides how to route to different services/PODs that we have created inside that Node.
+# Pod types does not allow changing everything in the configuration file (yaml). you can only update images,spec.activeDeadlineSeconds & spec.tolerations. If you want
+# to change anything else (containers count, name, port for example), it is not possible with Pod. Instead you should use Deployment.
+metadata:
+  name: client-pod #Name of the POD, mostly used for logging purposes. Master inspects name & kind property, looks into all running services, amd if it finds an object with identical name & same type, then rather than creating a new container, it updates the existing container.
+  labels:
+    component: web #This label will be used to refer to this POD from other objects (from service for example)
+spec:
+  containers:
+    - name: client
+      image: stephengrider/multi-worker
+      ports:
+        - containerPort: 9999 #This is the port which was open for outside world in actual multi-docker-client image
+
+
+##########Important Notes:
+# Kubernetes is a system to deploy containerized apps
+# Nodes are individual machines(or VMs) that run containers
+##### In dev , minikube is running a VM(a Node) with docker inside
+# Masters are machines (or VMs) with a set of programs to manage Nodes
+# Kubernetes didn't build our images -It got them from somewhere else (docker hub e.g.)
+# Kubernetes(the master) decided where to run each container- each node can run different number of containers
+# To deploy something, we update the desired state of the master with a config file (via kubectl)
+# The master works constantly to meet your desired state(fullfill its list of responsibilities  )
+# Prefer Declarative approach(I want 3 instances: change config file, and send it to master using kubectl) over Imperative approach(create 3 instances, create POD manually)
+
+
+# On master, there are programs(4 in total). kube-apiserver program on master is 100% responsibile for monitoring the current status of all different
+# nodes inside your cluster and making sure that they are essentially doing the correct thing.
+
+# we, as developer, never interact directly with VM's/Nodes. We alwasy ask Master(via kubectl) and Master executes the request on Nodes.
+
+
+####Commands
+#minikube start  [It starts the local VM, should be used only in DEV environment]
+#minikube status  [Provides status of VM]
+#minikube dashboard  [opens kubernetes dashboard in browser]
+#minikube ip [gives IP of vm]
+# minikube docker-env   # exports set of environment variables pointing to docker environment inside VM of kubernetes.
+# eval $(minikube docker-env)   # Configure the VM to use your docker-server (only configures your current terminal window)
+# Above command configiures the docker-client to point to docker-server inside VM of kuberntes. execute 'docker ps' and you will see now the details inside VM of kubernetes.
+
+# Why would you want to point docker-client to docker-server inside VM of kuberntes cluster?
+# - Use all the same debugging techniques(docker logs CONTAINERID e.g.) we leared with docker client [Many of these commands are available through kubectl]
+#       docker logs CONTAINERID   <==> kubectl logs PODNAME   (got from kubectl get pods)
+#       docker exec -it CONTAINERID sh   <==> kubectl exec -it PODNAME sh
+# - Manually kill containers to test kubernetes ability to self-heal
+# - Delete cached images in the node
+#       docker system prune -a
+
+
+
+
+#kubectl apply -f client-pod.yaml  [creates the Object: POD/service/Deployment/etc...] [Note: if there was no change in file, apply command will be rejected]
+# https://github.com/kubernetes/kubernetes/issues/33664
+# Note: We are not allowe to use Environment variables inside config file in Kubernetes
+
+#kubectl apply -f k8s  //In this case i've mentioned a directory, so kubernetes will apply all the files in this directory at once. No need to fire apply command for individual files inside the directory
+
+#kubectl get pods
+#kubectl get pods -o wide [also shows the IP address of POD internal to VM. we can't directly access that IP]. Every single pod that we created gets an IP address assigned to it.
+#kubectl describe <type> <name>
+#kubectl describe pods client-pod
+#kubectl delete -f <config file>  [Deletes am object (POD,Deployment,..). config file is the same file that created this object]
+#kubectl get deployments
+# kubectl set image <object-type> / <object-name> <container-name> = <new image to use>
+# We use set command (shown in above line) to update a property on one of our object that exists inside our cluster.
+#kubectl set image deployment/client-deployment client=stephengrider/multi-client:v5  [command forcing the deployment to use new image version]
+#Object types: Pods, Services, Deployment
+# every pods gets it's own IP within VM
+# service is going to watch for every POD that matches its selector and then automatically route traffic directly to it
+#kubectl get storageclass
+#kubectl describe storageclass
+#kubectl get pv                       #lists all persistent volume
+#kubectl get pvc                      #lists all persistent volume claims (claim is an advertisement)
+
+#Secrets: A kubernetes object used to securely store a peice of information in the cluster, such as database password, apikey, ssh key, etc.
+# Like other objects, you can create a config file. But for secret it does not really makes sense (otherwise it is not secret anymore :-))
+# For secret, we will run imperative command, in all environments (locally as well as including PROD)
+#kubectl create secret generic/docker-registry/tls <secret_name> --from-literal key=value
+#kubectl create secret generic pgpassword --from-literal PGPASSWORD=12345asdf
+
+
+
+# Problem with Pod
+# we can only update the image of Pod
+# we can't update other config parameters like name, port & number-of-containers
+# This is one of the reason why PODs are rarely used in Production.
+
+
+# PDD vs deployment
+# POD   : Runs a single set of closely related containers
+#       : Good for one-off Dev purposes
+#       : Rarely used directly in Production
+
+#Deployment : Runs a set of identical PODs(one ore more)
+#           : Monitors state of each pod, updating as necessary,making sure that they have correct config and that the right number exists
+#           : If any POD crashes for whatever reason, Deployment will attempt to automatically restart that POD (or create a new one with fresh state)
+#           : Good for Dev, Good for Production
+
+# when we craate a Deployment object, it will have attached to it a POD template (a block of configuration that dictates what each pod created by this Deployment will look like)
+# pod template can have: name, image, port,containers. Deployment will use this template to create each pod
+# If we change a chane to the pod-template(change port from 3000 to 9000 e.g.), then Deployment will attempt to either change the existings pods its managing
+# or it will attempt to kill the existing pods and create new ones with new values of port.

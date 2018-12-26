@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment # Deployment is a kubernets Object that maintains a set of identical pods, ensuring that they have the correct config and that the right
+#number exists. In other words the pods are always in runnable state(not crashing/dead). We can use either Pods or Deployments in kubernetes to run containers for out applications.
+
+# Pods runs a single set of very closely related containers (which have very tight integration with each other). It's good for one-off dev purposes
+# (means only good for development environment). Rarely used in production due to limitations on updates of config.
+
+# Deployment maintains a set of identical pods (one or more). In that set, every pod is going to run the exact set of containers with identical
+# configuration. Deployment is going to monitor the state of each pod( watch the configuration of each one, make sure that every pod is running the
+# containers successfully inside of it). If any pod happens to crash for any reason, deployment is going to automatically attempt to restart that pod
+# or completely recreate it in a fresh/new state. Deployment is good for dev environment, and for Production environment as well.
+
+# When we create a Deployment Object, it's going to have attached to it a Pod-template, which is essentially a block of configuation that says here's what
+# any pod created by this deployment suppose to look like.
+# Pod-template: {containers: 1, name: client, port:3000, image: multi-worker}. This will create a pod of similar config. Deployment is going to be
+# constantly watching all the different pods it maintains, wathcing their state and making sure that they have correct state.
+# If any change in Pod-template occurs, Deployment will attempt to update the existing pod or kill it and create a brand new pod with new configuration.
+
+# With a Deployment we can change any config tied to a pod, no limitations.
+
+# Deployment does not itself creates the POD. Instead it reaches out to kubernetes API on master, and ask master to create the POD for it, handling over
+# the config file. Master then goes ahead and creats the POD. Deployment (after the POD was created by the master) needs a handle on that pod
+
+
+# Controller: In kubernetes a controller is any object (including Deployment) that constantly works to make some desired state a reality inside k8s cluster.
+
+
+metadata: #Metadata about the object(deployment)
+  name: client-deployment  # Deployment will have a name 'client-deployment'
+spec:
+  replicas: 1 # Number of different PODs this Deployment is suppose to make. Every pod this deployment is going to created will be absolutely identical in nature
+  selector: #help find the PODs being created(by master api), using the specified label (component: web)
+    matchLabels: #This gives us a handle on pod's label (cmponent: web) defined down below (template.metadata.labels). It is possible that down below we have many labels, but here we have only few which matches the few from down below)
+      component: web
+  template: #defines the exact config that should be used for every POD that is created & maintained by this Deployment
+    metadata:
+      labels: #Every POD that is created by this Deployment will have a label of component: web. You can have multiple labels here
+        component: web
+    spec:
+      containers: #List of containers every POD (maintained by this Deployment) is going to have. It's an array. Every POD that is created by this Deployment will have a [list of ]containers named client and mentioned image with port shown below
+        - name: client
+          image: stephengrider/multi-client #it should be multi-client
+          ports:
+            - containerPort: 3000 #correct port is 3000
+
+
+
+# Deployment reaches out to kubernetes api on master and ask master to create a POD on behalf of the Deployment by providing the configuration
+# Master then creates the POD, and then Deployment can use selector to find newly created PODs
